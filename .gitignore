@@ -29,7 +29,6 @@ local.properties
 
 # Scratchpad / session work (not source)
 .claude/
-tools/
 
 # Python venv / caches (if any)
 __pycache__/
