@@ -1,0 +1,1 @@
+<resources xmlns:tools="http://schemas.android.com/tools"><style name="Theme.Engliva" parent="android:style/Theme.Material.Light.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:colorAccent">#365E9D</item></style></resources>

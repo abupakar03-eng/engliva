@@ -1,0 +1,38 @@
+# Build output
+build/
+app/build/
+.gradle/
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+
+# Local config (contains personal SDK path)
+local.properties
+
+# Keystores / secrets — never commit
+*.jks
+*.keystore
+*.key
+
+# Logs
+*.log
+
+# Temp
+*.swp
+*~
+
+# Scratchpad / session work (not source)
+.claude/
+tools/
+
+# Python venv / caches (if any)
+__pycache__/
+*.pyc
+.venv/
+venv/

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher icon background — matches the blue in the Englive icon -->
+    <!-- White background lets the icon's own gradient/rounded corners show naturally -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>
