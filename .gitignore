@@ -19,6 +19,11 @@ local.properties
 *.jks
 *.keystore
 *.key
+release-keys/
+keystore.properties
+
+# Old voice comparison clips (not part of the app)
+voice-samples/
 
 # Logs
 *.log
