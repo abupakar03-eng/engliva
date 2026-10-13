@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Launcher icon background — matches the blue in the Englive icon -->
-    <!-- White background lets the icon's own gradient/rounded corners show naturally -->
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Launcher icon background — matches the blue in the Engliva icon -->
+    <!-- Dark blue taken from the edge of the logo, so the adaptive icon has no visible seam -->
+    <color name="ic_launcher_background">#193F68</color>
 </resources>

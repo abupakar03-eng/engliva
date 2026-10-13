@@ -145,13 +145,13 @@ private fun SplashScreen() {
 
     LaunchedEffect(Unit) {
         // Logo pops in
-        scale.animateTo(1.05f, animationSpec = tween(500, easing = FastOutSlowInEasing))
-        scale.animateTo(1f, animationSpec = tween(150))
+        scale.animateTo(1.05f, animationSpec = tween(700, easing = FastOutSlowInEasing))
+        scale.animateTo(1f, animationSpec = tween(200))
         // Title fades in
-        alpha.animateTo(1f, animationSpec = tween(400))
-        logoAlpha.animateTo(1f, animationSpec = tween(300))
+        alpha.animateTo(1f, animationSpec = tween(500))
+        logoAlpha.animateTo(1f, animationSpec = tween(450))
         // Tagline fades in
-        taglineAlpha.animateTo(1f, animationSpec = tween(400, delayMillis = 200))
+        taglineAlpha.animateTo(1f, animationSpec = tween(450, delayMillis = 150))
     }
 
     Box(
@@ -168,23 +168,21 @@ private fun SplashScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Logo icon
-            Box(
+            // Logo
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(R.drawable.app_logo),
+                contentDescription = null,
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(120.dp)
                     .scale(scale.value)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("📚", fontSize = 52.sp)
-            }
+                    .clip(RoundedCornerShape(26.dp)),
+            )
 
             Spacer(Modifier.height(8.dp))
 
             // App name
             Text(
-                text = "ENGLIVE",
+                text = "ENGLIVA",
                 fontSize = 34.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
@@ -192,13 +190,22 @@ private fun SplashScreen() {
                 modifier = Modifier.alpha(alpha.value),
             )
 
-            // Subtitle
+            // Tagline
             Text(
-                text = "English Language Skills",
-                fontSize = 14.sp,
-                color = Color.White.copy(alpha = 0.75f),
-                letterSpacing = 1.sp,
+                text = "Your Personal Indian English Teacher",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.9f),
+                textAlign = TextAlign.Center,
                 modifier = Modifier.alpha(logoAlpha.value),
+            )
+            Text(
+                text = "Learn English. Speak with Confidence.",
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.7f),
+                letterSpacing = 0.5.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.alpha(taglineAlpha.value),
             )
 
         }
@@ -210,7 +217,9 @@ private fun EnglivaRoot(vm: EnglivaViewModel, onMicRequest: () -> Unit) {
     var showSplash by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(2200)
+        // Animations finish at ~2.5 s; hold the finished splash ~1 s so the
+        // tagline can actually be read.
+        kotlinx.coroutines.delay(3500)
         showSplash = false
     }
 
