@@ -15,6 +15,7 @@ import com.engliva.domain.model.CourseDay
 import com.engliva.engine.CourseEngine
 import com.engliva.speech.StudentSpeechEngine
 import com.engliva.speech.TeacherSpeechEngine
+import com.engliva.speech.TeacherVoiceOption
 import com.engliva.speech.VoiceRecorder
 import com.engliva.speech.VoiceState
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,10 @@ class EnglivaViewModel(
     /** True when the device has a Tamil voice, so the Tamil line can be heard. */
     val tamilVoice: StateFlow<Boolean> = teacher.tamilAvailable
 
+    /** Indian-English voices on this phone, and the one the teacher uses. */
+    val indianVoices: StateFlow<List<TeacherVoiceOption>> = teacher.indianVoices
+    val currentVoice: StateFlow<String?> = teacher.currentVoice
+
     private val _home = MutableStateFlow(HomeState())
     val home: StateFlow<HomeState> = _home
 
@@ -79,6 +84,7 @@ class EnglivaViewModel(
     val showTamil: StateFlow<Boolean> = _showTamil
 
     init {
+        teacher.selectVoice(settings.teacherVoiceId)
         viewModelScope.launch(Dispatchers.IO) {
             val c = repository.loadCourse()
             val d = repository.loadContent()
@@ -141,6 +147,7 @@ class EnglivaViewModel(
     }
     fun exitLesson() { teacher.stop(); student.cancel(); recorder.release(); engine.exitLesson() }
     fun speakTeacher(text: String) { if (!_muted.value) teacher.speak(text) }
+    fun stopTeacher() = teacher.stop()
 
     // ── Record and compare ────────────────────────────────────────────────────
     // The microphone goes to one client at a time, so listening and recording
@@ -169,6 +176,16 @@ class EnglivaViewModel(
         _showTamil.value = !_showTamil.value
         settings.showTamil = _showTamil.value
     }
+
+    /** Switches the teacher voice and plays a short sample so the student hears it. */
+    fun setTeacherVoice(id: String) {
+        settings.teacherVoiceId = id
+        teacher.selectVoice(id)
+        if (!_muted.value) teacher.speak("Good morning! I am your English teacher.")
+    }
+
+    fun refreshVoices() = teacher.refreshVoices()
+    fun openVoiceDownload(context: android.content.Context) = teacher.openVoiceDownload(context)
 
     fun startMic() = student.startListening()
     fun setTtsSpeed(rate: Float) { _ttsSpeed.value = rate; teacher.setSpeed(rate) }

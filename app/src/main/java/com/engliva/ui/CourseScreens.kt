@@ -319,7 +319,7 @@ internal fun ModuleDetailScreen(
                 }
                 Spacer(Modifier.width(4.dp))
                 Column {
-                    Text("${mod.moduleId.uppercase().replace('_', ' ')}: ${mod.title}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(mod.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     val lessonCount = daysInMod.count { !it.isExam }
                     val hasExam = daysInMod.any { it.isExam }
                     Text(
@@ -474,11 +474,11 @@ internal fun ModuleExamCard(
         elevation = CardDefaults.cardElevation(1.dp),
     ) {
         Row(
-            Modifier.padding(16.dp).drawBehind {
+            Modifier.drawBehind {
                 drawRect(color = stripe,
                     topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
                     size = androidx.compose.ui.geometry.Size(4.dp.toPx(), size.height))
-            },
+            }.padding(start = 20.dp, top = 16.dp, end = 16.dp, bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -523,13 +523,13 @@ internal fun SectionIntroCard(
         elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Column(
-            Modifier.padding(14.dp).drawBehind {
+            Modifier.drawBehind {
                 drawRect(
                     color = AccentAmber,
                     topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
                     size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height),
                 )
-            }
+            }.padding(start = 18.dp, top = 14.dp, end = 14.dp, bottom = 14.dp)
         ) {
             Text(
                 "📖 WHY THIS SECTION",
@@ -607,7 +607,10 @@ internal fun LessonCard(
                 val notCounted = setOf("feedback", "retry_or_progress", "completion")
                 val totalActivities = day.activitySequence.count { it !in notCounted }.coerceAtLeast(1)
                 val actIdx = progress?.activityIndex ?: 0
-                val name = if (totalInSection > 1) "Lesson $indexInSection of $totalInSection" else day.lessonTitle
+                // The lesson's own title. The badge on the left already shows the
+                // position within the section, so a positional placeholder like
+                // "Lesson 3 of 5" only hid what the lesson actually teaches.
+                val name = day.lessonTitle
                 Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(2.dp))
                 Text(

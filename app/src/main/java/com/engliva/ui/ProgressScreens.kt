@@ -442,6 +442,19 @@ internal fun SettingsScreen(vm: EnglivaViewModel) {
     val ttsSpeed by vm.ttsSpeed.collectAsState()
     val showTamil by vm.showTamil.collectAsState()
     val tamilVoice by vm.tamilVoice.collectAsState()
+    val indianVoices by vm.indianVoices.collectAsState()
+    val currentVoice by vm.currentVoice.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Coming back from the phone's voice-download screen: pick up new voices.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) vm.refreshVoices()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
@@ -483,6 +496,58 @@ internal fun SettingsScreen(vm: EnglivaViewModel) {
                         )
                     }
                     Switch(checked = showTamil, onCheckedChange = { vm.toggleTamil() })
+                }
+            }
+        }
+
+        // Teacher voice — the phone's own Indian-English voices
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(1.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("🧑‍🏫", fontSize = 22.sp)
+                        Column(Modifier.weight(1f)) {
+                            Text("Teacher Voice", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (indianVoices.isEmpty()) "No Indian English voice on this phone yet"
+                                else "Indian English · tap a voice to hear it",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF666666),
+                            )
+                        }
+                    }
+                    if (indianVoices.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            indianVoices.forEach { voice ->
+                                FilterChip(
+                                    selected = currentVoice == voice.id,
+                                    onClick = { vm.setTeacherVoice(voice.id) },
+                                    label = { Text(voice.label) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFFD6E4FF),
+                                        selectedLabelColor = PrimaryBlue,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    TextButton(onClick = { vm.openVoiceDownload(context) }, contentPadding = PaddingValues(0.dp)) {
+                        Text(
+                            if (indianVoices.isEmpty()) "⬇ Download Indian English voice" else "⬇ Get more voices",
+                            color = PrimaryBlue,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }

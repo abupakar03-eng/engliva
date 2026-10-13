@@ -100,29 +100,48 @@ class CourseRepository(
         val startIdx = courseFile.days.count { it.sectionId == day.sectionId && it.day < day.day }
         val item = source.getOrElse(startIdx) { source.last() }
 
-        val activities = day.activitySequence.mapNotNull { wire ->
+        val activities = day.activitySequence.flatMap { wire ->
             when (wire) {
-                "feedback", "retry_or_progress", "completion" -> null
+                "feedback", "retry_or_progress", "completion" -> emptyList()
+                "assessment" -> quizQuestions(item) ?: listOfNotNull(buildActivity(wire, item))
                 "discussion" -> {
                     val turns = item.turns
                     if (!turns.isNullOrEmpty()) {
-                        LessonActivity(
-                            ActivityType.RolePlay,
-                            item.title ?: item.text.lines().firstOrNull() ?: "",
-                            item.contentId,
-                            conversationTurns = turns,
-                            conversationTitle = item.title,
+                        // Grade the part the student actually plays. The screen
+                        // collects what they said and submits it, so a role play
+                        // ends in a real mark instead of a free 100 for skipping
+                        // every turn.
+                        val speakers = turns.map { it.speaker }.distinct()
+                        val studentSpeaker = speakers.getOrNull(1)
+                        val studentLines = turns
+                            .filter { studentSpeaker == null || it.speaker == studentSpeaker }
+                            .joinToString(" ") { it.text }
+                        listOf(
+                            LessonActivity(
+                                ActivityType.RolePlay,
+                                // The lesson's own title, so the role-play screen
+                                // says what the conversation is about.
+                                item.title ?: day.lessonTitle
+                                ?: item.text.lines().firstOrNull() ?: "",
+                                item.contentId,
+                                expectedAnswer = studentLines.ifBlank { null },
+                                similarityThreshold = 0.4,
+                                conversationTurns = turns,
+                                conversationTitle = item.title ?: day.lessonTitle,
+                            )
                         )
                     } else {
-                        LessonActivity(
-                            ActivityType.Discussion,
-                            item.text,
-                            item.contentId,
-                            conversationLines = item.text.split('\n').filter { it.isNotBlank() },
+                        listOf(
+                            LessonActivity(
+                                ActivityType.Discussion,
+                                item.text,
+                                item.contentId,
+                                conversationLines = item.text.split('\n').filter { it.isNotBlank() },
+                            )
                         )
                     }
                 }
-                else -> buildActivity(wire, item)
+                else -> listOfNotNull(buildActivity(wire, item))
             }
         }
 
@@ -179,6 +198,48 @@ class CourseRepository(
                 retryAllowed = true,
             )
         )
+    }
+
+    /**
+     * The questions a lesson ends with. Either an authored `check` on any item, or
+     * the Q&A pairs of a questions item whose answers are all present. Each pair
+     * becomes its own activity, so the lesson can actually ask: the question is
+     * shown and read out, the answer stays hidden, and the student's spoken answer
+     * is graded against that one model answer. Null when there is nothing to ask,
+     * and the plain recall activity is used instead.
+     */
+    private fun quizQuestions(item: CanonicalItem): List<LessonActivity>? {
+        val parts = item.parts
+        val pairs = item.check?.takeIf { it.isNotEmpty() }
+            ?: parts?.takeIf { it.kind == "questions" }?.questions
+            ?: return null
+        if (pairs.isEmpty() || pairs.any { it.a.isNullOrBlank() }) return null
+        return pairs.mapIndexed { i, qa ->
+            // A model answer may offer alternatives ("Good evening, Sir. / Good
+            // evening, Madam."). Saying either one is right, so the first is the
+            // expected answer and the rest are accepted — the matcher scores the
+            // best of them, and the word-by-word feedback compares against one
+            // answer instead of the whole list.
+            val alternatives = splitAlternatives(qa.a!!)
+            val answer = alternatives.first()
+            LessonActivity(
+                type = ActivityType.Assessment,
+                content = qa.q,
+                sourceContentId = item.contentId,
+                expectedAnswer = answer,
+                acceptedAnswers = alternatives.drop(1),
+                similarityThreshold =
+                    if (answer.length <= CourseContent.VERBATIM_MAX) 0.6 else 0.4,
+                quizIndex = i + 1,
+                quizTotal = pairs.size,
+            )
+        }
+    }
+
+    /** "A / B" -> ["A", "B"]; anything without a separator stays whole. */
+    private fun splitAlternatives(answer: String): List<String> {
+        val parts = answer.split(Regex("\\s*/\\s*")).map { it.trim() }.filter { it.length > 1 }
+        return parts.ifEmpty { listOf(answer.trim()) }
     }
 
     // ── Activity construction ─────────────────────────────────────────────────

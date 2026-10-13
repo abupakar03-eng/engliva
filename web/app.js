@@ -133,11 +133,33 @@ function planForDay(dayNumber) {
     if (NOT_COUNTED.has(wire)) continue;
     if (wire === "discussion") {
       if (item.turns && item.turns.length) {
-        activities.push({ type: "role_play", content: item.title || item.text.split("\n")[0], contentId: item.content_id, turns: item.turns, title: item.title });
+        // Grade the part the student actually plays, so a role play ends in a
+        // real mark instead of a free 100 for skipping every turn.
+        const speakers = [...new Set(item.turns.map(t => t.speaker))];
+        const studentLines = item.turns
+          .filter(t => speakers.length < 2 || t.speaker === speakers[1])
+          .map(t => t.text).join(" ");
+        activities.push({
+          type: "role_play",
+          // The lesson's own title, so the screen says what the talk is about.
+          content: item.title || day.lesson_title || item.text.split("\n")[0],
+          contentId: item.content_id,
+          turns: item.turns,
+          title: item.title || day.lesson_title,
+          expected: studentLines || null,
+          threshold: 0.4,
+        });
       } else {
         activities.push({ type: "discussion", content: item.text, contentId: item.content_id, lines: item.text.split("\n").filter(x => x.trim()) });
       }
       continue;
+    }
+    if (wire === "assessment") {
+      // A Q&A item whose questions all carry model answers is asked one question
+      // at a time: the question is shown and read out, the answer stays hidden,
+      // and the spoken answer is graded against that one model answer.
+      const quiz = quizActivities(item);
+      if (quiz) { activities.push(...quiz); continue; }
     }
     activities.push(buildActivity(wire, item));
   }
@@ -185,6 +207,37 @@ function buildExamPlan(day) {
     activities,
     requiredScore: 60,
   };
+}
+
+function quizActivities(item) {
+  const parts = item.parts;
+  // An authored end-of-lesson check on any item, or the Q&A pairs of a questions
+  // item whose answers are all present.
+  let pairs = (item.check && item.check.length) ? item.check : null;
+  if (!pairs && parts && parts.kind === "questions") pairs = parts.questions || [];
+  if (!pairs || !pairs.length) return null;
+  if (pairs.some(p => !p.a || !p.a.trim())) return null;
+  return pairs.map((p, i) => {
+    const alts = splitAlternatives(p.a);
+    const answer = alts[0];
+    return {
+      type: "assessment",
+      content: p.q,
+      contentId: item.content_id,
+      expected: answer,
+      accepted: alts.slice(1),
+      threshold: answer.length <= VERBATIM_MAX ? 0.6 : 0.4,
+      quizIndex: i + 1,
+      quizTotal: pairs.length,
+    };
+  });
+}
+
+// "Good evening, Sir. / Good evening, Madam." offers two right answers, so each
+// becomes an accepted alternative and the best match is scored.
+function splitAlternatives(answer) {
+  const parts = String(answer).split(/\s*\/\s*/).map(s => s.trim()).filter(s => s.length > 1);
+  return parts.length ? parts : [String(answer).trim()];
 }
 
 function buildActivity(wire, item) {
@@ -245,7 +298,7 @@ function submitAnswer(text) {
   const s = state.session; if (!s) return;
   const a = s.plan.activities[s.activityIndex]; if (!a) return;
   s.attempts++;
-  const eval_ = evaluate(text, a.expected, a.threshold);
+  const eval_ = evaluate(text, a.expected, a.threshold, a.accepted);
   // Score = actual similarity (0–100), penalised for retries.
   // Complete gibberish → low score. Perfect match → 100.
   const baseScore = Math.round(eval_.similarity * 100);
@@ -355,11 +408,64 @@ function similarity(a, b) {
   }
   return 1 - dp[dp.length - 1] / Math.max(a.length, b.length);
 }
-function evaluate(answer, expected, threshold) {
+// The words of an answer, with contractions expanded and punctuation dropped, so
+// "I'm fine, thank you." and "I am fine thank you" compare as words.
+const CONTRACTIONS = [
+  ["wouldn't", "would not"], ["shouldn't", "should not"],
+  ["couldn't", "could not"], ["mustn't", "must not"],
+  ["doesn't", "does not"], ["didn't", "did not"],
+  ["haven't", "have not"], ["hasn't", "has not"], ["hadn't", "had not"],
+  ["isn't", "is not"], ["aren't", "are not"],
+  ["wasn't", "was not"], ["weren't", "were not"],
+  ["won't", "will not"], ["can't", "cannot"],
+  ["i'm", "i am"], ["i've", "i have"], ["i'll", "i will"], ["i'd", "i would"],
+  ["you're", "you are"], ["you've", "you have"], ["you'll", "you will"], ["you'd", "you would"],
+  ["we're", "we are"], ["we've", "we have"], ["we'll", "we will"],
+  ["they're", "they are"], ["they've", "they have"], ["they'll", "they will"],
+  ["he's", "he is"], ["she's", "she is"], ["it's", "it is"],
+  ["that's", "that is"], ["there's", "there is"],
+  ["what's", "what is"], ["who's", "who is"], ["here's", "here is"],
+  ["let's", "let us"], ["don't", "do not"],
+];
+function spokenForm(s) {
+  let out = s;
+  for (const [k, v] of CONTRACTIONS) {
+    out = out.replace(new RegExp("\\b" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b", "g"), v);
+  }
+  return out.replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+// Edit distance measured in whole words, not characters.
+function wordSimilarity(a, b) {
+  const x = a.split(" ").filter(Boolean), y = b.split(" ").filter(Boolean);
+  if (!x.length || !y.length) return 0;
+  if (x.join(" ") === y.join(" ")) return 1;
+  let prev = y.map((_, i) => i + 1); prev.unshift(0);
+  let cur = new Array(y.length + 1).fill(0);
+  for (let i = 0; i < x.length; i++) {
+    cur[0] = i + 1;
+    for (let j = 0; j < y.length; j++) {
+      cur[j + 1] = Math.min(cur[j] + 1, prev[j + 1] + 1, prev[j] + (x[i] === y[j] ? 0 : 1));
+    }
+    const swap = prev; prev = cur; cur = swap;
+  }
+  return 1 - prev[y.length] / Math.max(x.length, y.length);
+}
+function evaluate(answer, expected, threshold, accepted) {
   const norm = normalize(answer);
   if (!expected) return { correct: true, normalized: norm, similarity: 1.0, feedback: "Response recorded. Continue when ready." };
-  const nExp = normalize(expected);
-  const sim = norm === nExp ? 1.0 : similarity(norm, nExp);
+  // A model answer may offer alternatives ("Good evening, Sir. / Good evening,
+  // Madam."). Saying either one is right, so score against the best of them —
+  // mirrors AnswerMatcher.evaluate in Kotlin.
+  const cands = [expected, ...(accepted || [])].map(normalize);
+  // Score the better of a character comparison and a word comparison. Speech to
+  // text writes one answer many ways — "I'm fine, thank you. How are you?" comes
+  // back as "I am fine how are you" — and a character edit distance punishes that
+  // although every word is right. The word comparison is order-sensitive, so a
+  // jumbled answer is still rejected.
+  const sim = cands.reduce((best, c) => Math.max(
+    best,
+    norm === c ? 1.0 : Math.max(similarity(norm, c), wordSimilarity(spokenForm(norm), spokenForm(c))),
+  ), 0);
   const passed = sim >= (threshold ?? 0.7);
   const feedback = passed
     ? (sim >= 0.9 ? "Excellent — that matches the lesson."
@@ -562,8 +668,26 @@ function speakTeacher(text) {
     u.rate = state.ttsSpeed;
     u.pitch = 1;
     u.lang = "en-IN";
+    const voice = indianVoice();
+    if (voice) u.voice = voice;
     window.speechSynthesis.speak(u);
   }
+}
+
+// Setting only lang lets each browser/phone pick its own voice (often US).
+// Choose one Indian-English voice by name so the teacher sounds the same.
+const PREFERRED_INDIAN_VOICES = ["Rishi", "Veena", "Microsoft Heera", "Microsoft Ravi", "Microsoft Neerja", "Microsoft Prabhat"];
+let cachedIndianVoice;
+function indianVoice() {
+  if (cachedIndianVoice) return cachedIndianVoice;
+  const voices = window.speechSynthesis.getVoices ? window.speechSynthesis.getVoices() : [];
+  const indian = voices.filter(v => /^en[-_]IN$/i.test(v.lang || ""));
+  if (!indian.length) return null;
+  cachedIndianVoice =
+    PREFERRED_INDIAN_VOICES.map(n => indian.find(v => v.name.startsWith(n))).find(Boolean) ||
+    indian.filter(v => v.localService).sort((a, b) => a.name.localeCompare(b.name))[0] ||
+    indian.sort((a, b) => a.name.localeCompare(b.name))[0];
+  return cachedIndianVoice;
 }
 function stopTTS() { if (ttsAvailable) window.speechSynthesis.cancel(); }
 
@@ -791,7 +915,8 @@ function renderModule() {
       const stat = done ? `Score: ${p.score}%`
                        : (p ? `Activity ${idx} of ${activityCount}` : `${activityCount} activities · not started`);
       const barPct = done ? 100 : Math.min(100, Math.round(idx * 100 / activityCount));
-      const name = secDays.length > 1 ? `Lesson ${i + 1} of ${secDays.length}` : sec.title;
+      // The lesson's own title; the numbered badge already shows its position.
+      const name = d.lesson_title;
       return `
         <div class="card clickable" onclick="startSession(${d.day})">
           <div class="lesson-card ${done ? 'done' : ''}">
@@ -914,9 +1039,32 @@ function renderTable(rows) {
   </table>`;
 }
 
-function activityInstruction(type, isRecall) {
+function quizInstruction(a) {
+  return `<div class="instr">❓ <b>Question ${a.quizIndex} of ${a.quizTotal}.</b> Read the question, then tap the mic and answer in your own words — you are marked on what you say.</div>`;
+}
+
+function renderModelAnswer(a, s) {
+  // Show every right answer, not just the one being matched.
+  const full = [a.expected, ...(a.accepted || [])].filter(Boolean).join(" / ");
+  if (s._revealed) {
+    return `<div class="model-answer revealed">
+      <div class="ma-label">✓ MODEL ANSWER</div>
+      <div class="ma-body">${linkWords(full)}${tamilLine(full)}</div>
+    </div>`;
+  }
+  return `<div class="model-answer">
+    <div class="ma-label">MODEL ANSWER — HIDDEN</div>
+    <div class="ma-hint">Say your answer first. The teacher will show the model answer once you have tried, or tap below if you are stuck.</div>
+    <button class="btn-skip" onclick="s._revealed=true;render()">👁 Show the answer</button>
+  </div>`;
+}
+
+function activityInstruction(type, isRecall, isLong) {
   if (isRecall) {
     return `<div class="instr">🧠 <b>Say it from memory.</b> Tap 👁 Peek if you need a hint. The teacher won't read it out this time.</div>`;
+  }
+  if (type === "assessment" && isLong) {
+    return `<div class="instr">🧪 <b>Final check.</b> Say it once more, clearly — this is the one that counts.</div>`;
   }
   const map = {
     listen:        `<div class="instr">🔊 <b>Listen carefully.</b> The teacher will read this to you — just observe.</div>`,
@@ -960,7 +1108,10 @@ function renderTeacher() {
   // phase (speak / assessment on short items) we stay silent so the student
   // works from memory instead.
   const isShort = a && a.content.length <= VERBATIM_MAX;
-  const isRecall = a && (a.type === "speak" || a.type === "assessment") && isShort;
+  // A quiz activity is the reverse of recall: its content IS the question, so it
+  // stays on screen and is read out — only the model answer is held back.
+  const isQuiz = !!(a && a.quizTotal);
+  const isRecall = !isQuiz && a && (a.type === "speak" || a.type === "assessment") && isShort;
   if (a && s._lastSpoken !== s.activityIndex) {
     s._lastSpoken = s.activityIndex;
     if (!isRecall) setTimeout(() => speakTeacher(a.content), 100);
@@ -973,7 +1124,8 @@ function renderTeacher() {
   const fb = s.feedback ? renderFeedback(s, a) : "";
   const inp = canType ? `<textarea class="answer-input" id="answer-input" placeholder="Your response"></textarea>` : "";
   const stt = renderSttRow();
-  const instr = activityInstruction(a?.type, isRecall);
+  const instr = isQuiz ? quizInstruction(a) : activityInstruction(a?.type, isRecall, !isShort);
+  const modelAnswer = isQuiz ? renderModelAnswer(a, s) : "";
 
   $app.innerHTML = `
     <div class="screen">
@@ -998,6 +1150,7 @@ function renderTeacher() {
             <div class="wp-hint">💡 Tamil meaning is shown under each line</div>
           </div>
         </div>
+        ${modelAnswer}
         ${fb}
         <div class="stt-row ${state.sttState.kind === 'listening' ? 'listening' : state.sttState.kind === 'result' ? 'result' : ''}">${stt}</div>
         ${renderVoicePractice()}
@@ -1039,9 +1192,9 @@ function renderRolePlay(s, a) {
   const bar = s._turnIdx < turns.length ? (
     isTeacherTurn
       ? `<button class="btn-continue" onclick="s._turnIdx++;render()">Next →</button>`
-      : `<button class="btn-mic" onclick="startSTT(t=>{s._turnIdx++})">🎤 Speak as ${uSpeaker}</button>
+      : `<button class="btn-mic" onclick="startSTT(t=>{s._spoken=(s._spoken||[]).concat(t);s._turnIdx++;render()})">🎤 Speak as ${uSpeaker}</button>
          <button class="btn-skip" onclick="s._turnIdx++;render()">Skip</button>`
-  ) : `<button class="btn-continue" onclick="advance();persistSession();render()">Done ✓</button>`;
+  ) : `<button class="btn-continue" onclick="submitAnswer((s._spoken||[]).join(' '))">Done ✓</button>`;
 
   $app.innerHTML = `
     <div class="screen">

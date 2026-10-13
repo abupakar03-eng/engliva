@@ -86,6 +86,14 @@ data class CanonicalItem(
     val title: String? = null,
     val turns: List<ConversationTurn>? = null,
     val parts: ContentParts? = null,
+    /**
+     * Optional end-of-lesson check: the questions the app asks once the student
+     * has been taught and has practised. Each becomes its own activity — the
+     * question on screen and read out, the answer held back, and what the student
+     * says graded against the model answer. Used by lessons whose content is not
+     * already a list of questions.
+     */
+    val check: List<QAPair>? = null,
 )
 
 /**
@@ -185,7 +193,17 @@ data class LessonActivity(
     val conversationTurns: List<ConversationTurn> = emptyList(),
     val conversationTitle: String? = null,
     val parts: ContentParts? = null,
-)
+    /**
+     * Set on the question-by-question check built from a Q&A item: [content] is
+     * the question, [expectedAnswer] the model answer, and these two place it in
+     * the run ("Question 2 of 5"). Both 0 on every other activity.
+     */
+    val quizIndex: Int = 0,
+    val quizTotal: Int = 0,
+) {
+    /** True when this activity asks a question and waits for a spoken answer. */
+    val isQuizQuestion: Boolean get() = quizTotal > 0
+}
 
 data class LessonPlan(
     val courseId: String,

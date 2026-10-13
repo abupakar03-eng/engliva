@@ -10,6 +10,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.Locale
@@ -26,25 +27,66 @@ sealed interface SpeechInputState {
 
 // ── Teacher TTS ───────────────────────────────────────────────────────────────
 
+/** One Indian-English voice installed on this phone. */
+data class TeacherVoiceOption(val id: String, val label: String)
+
 interface TeacherSpeechEngine {
     val available: StateFlow<Boolean>
     /** True when the device has a Tamil voice, so the Tamil line can be read aloud. */
     val tamilAvailable: StateFlow<Boolean>
+    /** Indian-English voices installed on this phone; empty when it has none. */
+    val indianVoices: StateFlow<List<TeacherVoiceOption>>
+    /** Id of the voice the teacher speaks with, or null when it falls back to generic English. */
+    val currentVoice: StateFlow<String?>
     fun speak(text: String)
     /** Reads the Tamil translation line. No-op when no Tamil voice exists. */
     fun speakTamil(text: String)
+    /** Prefers the voice with this id; null means "pick the best Indian voice". */
+    fun selectVoice(id: String?)
+    /** Re-reads the installed voices, e.g. after the student downloaded one. */
+    fun refreshVoices()
+    /** Opens the phone's screen for downloading voices (or installing Google's TTS engine). */
+    fun openVoiceDownload(context: Context)
     fun stop()
     fun setSpeed(rate: Float)
     fun close()
 }
 
+// Rewrite awkward-to-speak tokens before feeding them to TTS. "/" would
+// be read as "slash", "etc." as "e t c" — students hear that as noise.
+// The displayed text is not affected, only what the engine speaks.
+internal fun speakableText(input: String): String = input
+    .replace(Regex("\\betc\\.?", RegexOption.IGNORE_CASE), "etcetera")
+    .replace(Regex("\\bEg\\."),                            "For example,")
+    .replace(Regex("\\be\\.g\\.", RegexOption.IGNORE_CASE), "for example,")
+    .replace(Regex("\\bi\\.e\\.", RegexOption.IGNORE_CASE), "that is,")
+    .replace(Regex("\\bMr\\."),  "Mister")
+    .replace(Regex("\\bMrs\\."), "Missus")
+    .replace(Regex("\\bMs\\."),  "Miss")
+    .replace(Regex("\\bDr\\."),  "Doctor")
+    .replace(Regex("\\bSt\\."),  "Saint")
+    .replace(Regex("\\s*/\\s*"), " or ")
+    .replace(Regex("\\s*—\\s*"), ", ")
+    .replace(Regex("\\s*–\\s*"), ", ")
+    .replace(Regex("\\s+"), " ")
+    .trim()
+
 class AndroidTeacherSpeechEngine(context: Context) : TeacherSpeechEngine, TextToSpeech.OnInitListener {
-    private val tts = TextToSpeech(context.applicationContext, this)
+    // Ask for Google's engine explicitly so phones sound alike (Samsung/Xiaomi
+    // defaults sound different) — it is installed on most phones even when it
+    // is not the default. Android falls back to the default engine by itself.
+    private val tts = TextToSpeech(context.applicationContext, this, GOOGLE_TTS_ENGINE)
     private val _available = MutableStateFlow(false)
     override val available: StateFlow<Boolean> = _available
 
     private val _tamilAvailable = MutableStateFlow(false)
     override val tamilAvailable: StateFlow<Boolean> = _tamilAvailable
+
+    private val _indianVoices = MutableStateFlow<List<TeacherVoiceOption>>(emptyList())
+    override val indianVoices: StateFlow<List<TeacherVoiceOption>> = _indianVoices
+
+    private val _currentVoice = MutableStateFlow<String?>(null)
+    override val currentVoice: StateFlow<String?> = _currentVoice
 
     // Preferred: Indian English. Falls back to generic English if unavailable.
     private val preferredLocale = Locale("en", "IN")
@@ -52,12 +94,19 @@ class AndroidTeacherSpeechEngine(context: Context) : TeacherSpeechEngine, TextTo
 
     private var currentRate = 0.75f
 
+    /** Voice the student picked in Settings; null = choose automatically. */
+    @Volatile private var requestedVoiceId: String? = null
+
+    /** The Indian-English voice in use, or null when the device has none. */
+    private var teacherVoice: Voice? = null
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             val result = tts.setLanguage(preferredLocale)
             if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                 tts.setLanguage(Locale.ENGLISH)
             }
+            refreshVoices()
             tts.setSpeechRate(currentRate)
             tts.setPitch(1.0f)
             _available.value = true
@@ -67,32 +116,14 @@ class AndroidTeacherSpeechEngine(context: Context) : TeacherSpeechEngine, TextTo
         }
     }
 
-    // Rewrite awkward-to-speak tokens before feeding them to TTS. "/" would
-    // be read as "slash", "etc." as "e t c" — students hear that as noise.
-    // The displayed text is not affected, only what the engine speaks.
-    private fun speakableText(input: String): String = input
-        .replace(Regex("\\betc\\.?", RegexOption.IGNORE_CASE), "etcetera")
-        .replace(Regex("\\bEg\\."),                            "For example,")
-        .replace(Regex("\\be\\.g\\.", RegexOption.IGNORE_CASE), "for example,")
-        .replace(Regex("\\bi\\.e\\.", RegexOption.IGNORE_CASE), "that is,")
-        .replace(Regex("\\bMr\\."),  "Mister")
-        .replace(Regex("\\bMrs\\."), "Missus")
-        .replace(Regex("\\bMs\\."),  "Miss")
-        .replace(Regex("\\bDr\\."),  "Doctor")
-        .replace(Regex("\\bSt\\."),  "Saint")
-        .replace(Regex("\\s*/\\s*"), " or ")
-        .replace(Regex("\\s*—\\s*"), ", ")
-        .replace(Regex("\\s*–\\s*"), ", ")
-        .replace(Regex("\\s+"), " ")
-        .trim()
-
     override fun speak(text: String) {
         if (!_available.value || text.isBlank()) return
         val spoken = speakableText(text)
         if (spoken.isBlank()) return
         // Always re-assert the English voice: speakTamil switches the engine to
         // ta-IN, and this keeps the next teacher line from inheriting it.
-        tts.setLanguage(preferredLocale)
+        val voice = teacherVoice
+        if (voice != null) tts.voice = voice else tts.setLanguage(preferredLocale)
         // TextToSpeech.speak() rejects text longer than getMaxSpeechInputLength()
         // (≈4000 chars). Long m4 passages can approach that — chunk defensively
         // on paragraph/sentence boundaries so nothing is dropped or errored.
@@ -136,6 +167,62 @@ class AndroidTeacherSpeechEngine(context: Context) : TeacherSpeechEngine, TextTo
 
     override fun stop() { tts.stop() }
     override fun close() { tts.stop(); tts.shutdown() }
+
+    override fun selectVoice(id: String?) {
+        requestedVoiceId = id
+        if (_available.value) refreshVoices()
+    }
+
+    override fun refreshVoices() {
+        val indian = installedIndianVoices()
+        _indianVoices.value = indian.mapIndexed { i, v ->
+            TeacherVoiceOption(v.name, "Voice ${i + 1}" + if (v.isNetworkConnectionRequired) " (needs internet)" else "")
+        }
+        // Pick one specific en-IN voice by name instead of "whatever the engine
+        // defaults to", so the teacher sounds the same on every phone.
+        teacherVoice = indian.firstOrNull { it.name == requestedVoiceId }
+            ?: PREFERRED_INDIAN_VOICES.firstNotNullOfOrNull { name -> indian.firstOrNull { it.name == name } }
+            ?: indian.firstOrNull()
+        teacherVoice?.let { tts.voice = it }
+        _currentVoice.value = teacherVoice?.name
+    }
+
+    override fun openVoiceDownload(context: Context) {
+        val hasGoogle = runCatching { tts.engines.any { it.name == GOOGLE_TTS_ENGINE } }.getOrDefault(false)
+        val intents = if (hasGoogle) listOf(
+            // Google's own "install voice data" screen, then the system TTS settings.
+            Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).setPackage(GOOGLE_TTS_ENGINE),
+            Intent("com.android.settings.TTS_SETTINGS"),
+        ) else listOf(
+            // No Google engine at all: send the student to install it from Play.
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$GOOGLE_TTS_ENGINE")),
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$GOOGLE_TTS_ENGINE")),
+        )
+        for (intent in intents) {
+            val started = runCatching {
+                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+            if (started) return
+        }
+    }
+
+    // Installed en-IN voices; offline ones first, since the app is meant to
+    // work without internet.
+    private fun installedIndianVoices(): List<Voice> =
+        runCatching { tts.voices }.getOrNull().orEmpty()
+            .filter {
+                it.locale.language == "en" && it.locale.country == "IN" &&
+                    TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in it.features
+            }
+            .sortedWith(compareBy<Voice>({ it.isNetworkConnectionRequired }, { it.name }))
+
+    private companion object {
+        const val GOOGLE_TTS_ENGINE = "com.google.android.tts"
+        // Google TTS Indian-English voices, in order of preference.
+        val PREFERRED_INDIAN_VOICES = listOf(
+            "en-in-x-ena-local", "en-in-x-ahp-local", "en-in-x-cxx-local", "en-in-x-end-local",
+        )
+    }
 }
 
 // ── Student STT ───────────────────────────────────────────────────────────────

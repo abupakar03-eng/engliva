@@ -1,0 +1,168 @@
+"""Modules 4 (Comprehension) and 5 (Composition).
+
+Module 4 already ships one "… — Questions" lesson per passage; what it never had
+is the model answers, so `ANSWERS` fills the `a` slot of each existing question
+instead of adding more lessons.
+
+Module 5's articles, letters and story hints have no questions at all, so they get
+authored practice lessons like the other modules.
+
+`qa`      = (question, answer, question_tamil, answer_tamil)
+`ANSWERS` = {question-lesson content_id: [(answer, answer_tamil), …]} in the order
+            the questions already appear.
+"""
+
+ANSWERS = {
+    "c0522q": [
+        ("She became blind.", "அவர் பார்வையிழந்தார்."),
+        ("Because he became greedy after seeing her furniture.",
+         "அவருடைய மரச்சாமான்களைப் பார்த்து பேராசை கொண்டதால்."),
+        ("Every day he took away some of her furniture.",
+         "தினமும் அவர் சில மரச்சாமான்களை எடுத்துச் சென்றார்."),
+        ("Because her cure was not complete — she could not see all her furniture.",
+         "அவரது குணம் முழுமையாகவில்லை — தன் மரச்சாமான்கள் எல்லாம் அவருக்குத் தெரியவில்லை."),
+        ("The Blind Lady and the Doctor.", "The Blind Lady and the Doctor."),
+    ],
+    "c0523q": [
+        ("To eat the crabs on the other side.", "அக்கரையில் இருந்த நண்டுகளைச் சாப்பிட."),
+        ("He howled after his meal, so the villagers came and beat the camel.",
+         "உணவுக்குப் பின் ஊளையிட்டார், அதனால் ஊர்க்காரர்கள் வந்து ஒட்டகத்தை அடித்தார்கள்."),
+        ("The villagers beat it with sticks.", "ஊர்க்காரர்கள் குச்சியால் அடித்தார்கள்."),
+        ("He rolled in the river and nearly drowned the jackal.",
+         "ஆற்றில் புரண்டு, நரியை கிட்டத்தட்ட மூழ்கடித்தார்."),
+        ("The Jackal and the Camel.", "The Jackal and the Camel."),
+    ],
+    "c0524q": [
+        ("She died during his birth.", "அவர் பிறக்கும்போது இறந்துவிட்டார்."),
+        ("A young mother with a baby was chosen as his nurse.",
+         "ஒரு கைக்குழந்தையுடன் இருந்த இளம் தாய் அவருக்குத் தாதியாகத் தேர்ந்தெடுக்கப்பட்டார்."),
+        ("She dressed her own child as the prince and fled with the real prince; the murderers killed her child.",
+         "தன் குழந்தையை இளவரசன் போல உடுத்தி, உண்மையான இளவரசனை அழைத்துக்கொண்டு தப்பினார்; கொலையாளிகள் அவர் குழந்தையைக் கொன்றனர்."),
+        ("She was grief-stricken at the loss of her own child.",
+         "தன் சொந்தக் குழந்தையை இழந்த துக்கத்தில் இருந்தார்."),
+        ("The Faithful Nurse.", "The Faithful Nurse."),
+    ],
+    "c0525q": [
+        ("He lost a purse of a hundred pieces of gold.",
+         "நூறு பொன் காசுகள் இருந்த ஒரு பணப்பையை இழந்தார்."),
+        ("The miser must offer a reward to those who reported the lost gold.",
+         "இழந்த பொன்னைக் கண்டுபிடித்துத் தருபவர்களுக்கு கூலி தர வேண்டும்."),
+        ("He said the purse had held 110 pieces, so the farmer had already taken his reward.",
+         "பையில் 110 காசுகள் இருந்ததாகவும், அதனால் விவசாயி ஏற்கனவே தன் கூலியை எடுத்துவிட்டதாகவும் சொன்னார்."),
+        ("He lost the purse altogether — the judge gave it to the farmer.",
+         "பையை முழுவதுமாக இழந்தார் — நீதிபதி அதை விவசாயிக்கே கொடுத்தார்."),
+        ("The Miser and the Lost Purse.", "The Miser and the Lost Purse."),
+    ],
+    "c0526q": [
+        ("He saw that all his subjects were lazy.", "தன் மக்கள் எல்லோரும் சோம்பேறிகளாக இருப்பதைக் கண்டார்."),
+        ("He put a very big stone in the middle of the road.",
+         "சாலையின் நடுவில் ஒரு மிகப் பெரிய கல்லை வைத்தார்."),
+        ("Three — a merchant, an officer and a young soldier.",
+         "மூன்று பேர் — ஒரு வணிகர், ஒரு அதிகாரி, ஒரு இளம் வீரர்."),
+        ("An iron box with a purse full of money.", "பணம் நிறைந்த ஒரு பையுடன் ஒரு இருப்புப் பெட்டி."),
+        ("The King and the Stone in the Road.", "The King and the Stone in the Road."),
+    ],
+    "c0528q": [
+        ("To drink at the stream.", "நீர் அருந்த."),
+        ("A dove dropped a leaf into the water and the ant climbed on to it.",
+         "ஒரு புறா தண்ணீரில் ஒரு இலையைப் போட்டது, எறும்பு அதில் ஏறியது."),
+        ("A hunter aimed his gun at the sleeping dove.",
+         "ஒரு வேட்டைக்காரன் உறங்கும் புறாவை நோக்கித் துப்பாக்கியைக் குறிவைத்தான்."),
+        ("The ant bit the hunter's ankle, so he missed his aim.",
+         "எறும்பு வேட்டைக்காரனின் கணுக்காலில் கடித்தது, அதனால் அவன் குறி தவறியது."),
+        ("The Ant and the Dove.", "The Ant and the Dove."),
+    ],
+}
+
+ADDITIONS = {
+    "m5_corruption": dict(qa=[
+        ("What does corruption affect, according to the passage?",
+         "It affects human rights and the rule of law.",
+         "பத்தியின்படி ஊழல் எதைப் பாதிக்கிறது?", "அது மனித உரிமைகளையும் சட்டத்தின் ஆட்சியையும் பாதிக்கிறது."),
+        ("What is the NHRC expected to develop?",
+         "The right to corruption-free governance.",
+         "NHRC எதை உருவாக்க வேண்டும்?", "ஊழலற்ற நிர்வாகத்திற்கான உரிமையை."),
+        ("What are rights-based approaches?",
+         "Strategies that turn social and economic goals into rights vested in the citizenry.",
+         "Rights-based அணுகுமுறை என்றால் என்ன?",
+         "சமூக, பொருளாதார இலக்குகளை மக்களுக்கு உரிமைகளாக மாற்றும் முறைகள்."),
+        ("Who are the ‘duty-holders’?", "The representatives of the government.",
+         "‘Duty-holders’ என்றால் யார்?", "அரசாங்கத்தின் பிரதிநிதிகள்."),
+    ]),
+    "m5_mother_teresa": dict(qa=[
+        ("How did Mother Teresa remain all her life?",
+         "Humble, simple and in many senses an ordinary woman.",
+         "மதர் தெரசா வாழ்நாள் முழுவதும் எப்படி இருந்தார்?",
+         "பணிவாக, எளிமையாக, பல வகைகளில் ஒரு சாதாரண பெண்ணாக."),
+        ("What did she lead, in spite of that?",
+         "One of the most extraordinary lives.",
+         "அதற்கு மாறாக அவர் எதை வழிநடத்தினார்?", "மிக அசாதாரணமான வாழ்க்கைகளில் ஒன்றை."),
+        ("What does the passage ask us to notice about her?",
+         "That greatness can come from ordinary simplicity.",
+         "அவர் பற்றி நாம் எதைக் கவனிக்க வேண்டும்?",
+         "சாதாரண எளிமையிலிருந்தும் பெருமை வரலாம் என்பதை."),
+    ]),
+    "m5_rural_managers": dict(qa=[
+        ("What is IRMA, and where is it?",
+         "The Institute of Rural Management, in Anand, Gujarat.",
+         "IRMA என்பது என்ன, எங்கே இருக்கிறது?",
+         "Institute of Rural Management — குஜராத் மாநிலம் ஆனந்தில்."),
+        ("Who initiated it?", "The National Dairy Development Board.",
+         "அதைத் தொடங்கியது யார்?", "National Dairy Development Board."),
+        ("What does IRMA offer besides research and consultancy?",
+         "Post-graduate programmes in rural management.",
+         "ஆராய்ச்சி, ஆலோசனை தவிர IRMA என்ன தருகிறது?",
+         "ஊரக மேலாண்மையில் முதுகலைப் பட்டப்படிப்புகள்."),
+    ]),
+    "m5_women": dict(qa=[
+        ("What do most studies show about women?",
+         "That women have more difficulty establishing their singularity than men.",
+         "பெண்கள் பற்றி பெரும்பாலான ஆய்வுகள் என்ன காட்டுகின்றன?",
+         "ஆண்களை விடப் பெண்கள் தனித்துவத்தை நிலைநாட்டுவதில் அதிக சிரமம் கொள்கிறார்கள்."),
+        ("Does that mean women are weaker by nature?",
+         "Not at all. It has to do with how small children are brought up.",
+         "அப்படியானால் பெண்கள் இயற்கையிலேயே பலவீனமானவர்களா?",
+         "இல்லவே இல்லை. சிறு குழந்தைகள் வளர்க்கப்படும் முறையே காரணம்."),
+        ("Whose work does the passage mention?", "Nancy Chodorow's.",
+         "பத்தியில் யாருடைய ஆய்வு குறிப்பிடப்படுகிறது?", "Nancy Chodorow."),
+    ]),
+    "m5_conflicts": dict(qa=[
+        ("How do people react to conflicts?",
+         "Differently — some calmly and others with an explosive response.",
+         "மக்கள் மோதல்களுக்கு எப்படி எதிர்வினை ஆற்றுகிறார்கள்?",
+         "வேறுபடுகிறார்கள் — சிலர் அமைதியாக, சிலர் வெடிக்கும் விதத்தில்."),
+        ("Where do our reactions to conflict come from?",
+         "They were learned early in our lives and are now well ingrained.",
+         "மோதலுக்கான நம் எதிர்வினைகள் எங்கிருந்து வருகின்றன?",
+         "அவை நம் சிறுவயதிலேயே கற்றுக்கொள்ளப்பட்டு, இப்போது ஆழமாகப் பதிந்துள்ளன."),
+        ("What is one useful thing we can do?",
+         "Review the ways we react to conflict.",
+         "நாம் செய்யக்கூடிய ஒரு பயனுள்ள காரியம் என்ன?", "மோதலுக்கு நாம் எதிர்வினை ஆற்றும் விதங்களை மறுபரிசீலனை செய்வது."),
+    ]),
+    "m5_letters": dict(qa=[
+        ("How should the format of a requisition be?", "Official.",
+         "ஒரு கோரிக்கைக் கடிதத்தின் வடிவம் எப்படி இருக்க வேண்டும்?", "அதிகாரப்பூர்வமாக."),
+        ("What should the salutation be?", "Official — ‘Respected Sir’ or ‘Madam’.",
+         "வாழ்த்து (salutation) எப்படி இருக்க வேண்டும்?", "அதிகாரப்பூர்வமாக — ‘Respected Sir’ அல்லது ‘Madam’."),
+        ("What must the letter state clearly?",
+         "The subject, who you are, and the purpose of the request.",
+         "கடிதத்தில் தெளிவாக என்ன இருக்க வேண்டும்?",
+         "பொருள் (subject), நீங்கள் யார், மற்றும் கோரிக்கையின் நோக்கம்."),
+        ("How should a requisition end?",
+         "With a thank you and your signature.",
+         "ஒரு கோரிக்கைக் கடிதம் எப்படி முடிய வேண்டும்?", "நன்றி சொல்லி, கையெழுத்துடன்."),
+    ]),
+    "m5_story_hints": dict(qa=[
+        ("What is a hint in composition?",
+         "A short phrase that tells one step of a story.",
+         "Composition-இல் ‘hint’ என்றால் என்ன?", "கதையின் ஒரு படியைச் சொல்லும் சிறிய சொற்றொடர்."),
+        ("How do you turn hints into a story?",
+         "Join the hints in order and add the missing words to make full sentences.",
+         "Hints-ஐ எப்படிக் கதையாக மாற்றுவது?",
+         "Hints-ஐ வரிசையாக இணைத்து, விடுபட்ட சொற்களைச் சேர்த்து முழு வாக்கியங்களாக ஆக்குவது."),
+        ("What must every story have?",
+         "A beginning, a middle and an end, with a lesson at the end.",
+         "ஒவ்வொரு கதையிலும் என்ன இருக்க வேண்டும்?",
+         "ஒரு தொடக்கம், நடு, முடிவு — இறுதியில் ஒரு பாடம்."),
+    ]),
+}

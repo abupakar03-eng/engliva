@@ -19,4 +19,11 @@ class AppSettings(context: Context) {
         set(value) {
             prefs.edit().putBoolean("show_tamil", value).apply()
         }
+
+    /** Phone voice the student picked for the teacher; null = choose automatically. */
+    var teacherVoiceId: String?
+        get() = prefs.getString("teacher_voice_id", null)
+        set(value) {
+            prefs.edit().putString("teacher_voice_id", value).apply()
+        }
 }

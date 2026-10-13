@@ -79,6 +79,21 @@ internal fun TeacherScreen(
     glossary: Map<String, String>,
     onWordTap: (Glossary.WordMeaning) -> Unit,
 ) {
+    // Only the top-bar arrow calls exitLesson(). Leaving any other way — the
+    // system back gesture, or the app going to the background — must still
+    // silence the teacher, or the lesson keeps talking over other screens.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) vm.stopTeacher()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            vm.stopTeacher()
+        }
+    }
+
     if (session == null) { LoadingFull(); return }
 
     val activity = session.plan.activities.getOrNull(session.activityIndex)
@@ -94,8 +109,12 @@ internal fun TeacherScreen(
 
     // Recall activities (short-content speak / assessment) hide the text so
     // the student has to say it from memory — teacher does NOT read it aloud.
+    // A quiz activity is the opposite: its content IS the question, so it stays
+    // on screen and is read out; only the model answer is held back.
     val isShort = (activity?.content?.length ?: 0) <= 200
-    val isRecall = isShort && activity?.type in listOf(ActivityType.Speak, ActivityType.Assessment)
+    val isQuiz = activity?.isQuizQuestion == true
+    val isRecall = !isQuiz && isShort &&
+        activity?.type in listOf(ActivityType.Speak, ActivityType.Assessment)
     // Keyed on the activity index, not the content id: every activity in a
     // lesson teaches the same canonical item, so a content-id key was constant
     // for the whole lesson — the memory blur stayed revealed and typed answers
@@ -226,7 +245,14 @@ internal fun TeacherScreen(
 
             // Activity-specific instruction so each phase feels distinct
             item {
-                ActivityInstructionCard(activity.type, isRecall, isLong = !isShort)
+                if (isQuiz) {
+                    QuizInstructionCard(
+                        index = activity.quizIndex,
+                        total = activity.quizTotal,
+                    )
+                } else {
+                    ActivityInstructionCard(activity.type, isRecall, isLong = !isShort)
+                }
             }
 
             // Teacher speech bubble — blurred during recall until student peeks or is graded
@@ -240,6 +266,22 @@ internal fun TeacherScreen(
                     glossary = glossary,
                     onWordTap = onWordTap,
                 )
+            }
+
+            // The model answer stays covered until the student has tried, so the
+            // check is a real question rather than a phrase to read back.
+            if (isQuiz) {
+                item {
+                    ModelAnswerCard(
+                        // Show every right answer, not just the one being matched.
+                        answer = (listOfNotNull(activity.expectedAnswer) + activity.acceptedAnswers)
+                            .joinToString(" / "),
+                        revealed = revealed,
+                        onReveal = { revealed = true },
+                        glossary = glossary,
+                        onWordTap = onWordTap,
+                    )
+                }
             }
 
             // Feedback card
@@ -320,6 +362,10 @@ internal fun ConversationRolePlayScreen(
     var currentTurnIdx by remember(session.activityIndex) { mutableIntStateOf(0) }
     // Guard so the same STT result advances the turn exactly once.
     var handledTurn by remember(session.activityIndex) { mutableIntStateOf(-1) }
+    // What the student actually said, turn by turn. Submitting this at the end
+    // grades their half of the conversation instead of awarding a free mark.
+    var spoken by remember(session.activityIndex) { mutableStateOf(listOf<String>()) }
+    var submitted by remember(session.activityIndex) { mutableStateOf(false) }
     val currentTurn = turns.getOrNull(currentTurnIdx)
     val isTeacherTurn = currentTurn?.speaker == teacherSpeaker
     val muted by vm.muted.collectAsState()
@@ -328,17 +374,22 @@ internal fun ConversationRolePlayScreen(
     LaunchedEffect(currentTurnIdx, activity.sourceContentId) {
         if (isTeacherTurn && currentTurn != null) vm.speakTeacher(currentTurn.text)
     }
-    // On student's STT result: advance the LOCAL turn counter. Only when every
-    // turn is done do we submit to the lesson engine to complete the activity.
+    // On student's STT result: remember the words and advance the LOCAL turn
+    // counter. Only when every turn is done do we submit to the lesson engine.
     LaunchedEffect(speech, currentTurnIdx) {
         if (speech is SpeechInputState.Result && !isTeacherTurn && handledTurn != currentTurnIdx) {
             handledTurn = currentTurnIdx
+            spoken = spoken + (speech as SpeechInputState.Result).text
             currentTurnIdx++
         }
     }
-    // When all turns are done, mark the role-play activity complete.
-    LaunchedEffect(currentTurnIdx) {
-        if (currentTurnIdx >= turns.size) vm.submit("__role_play_complete__")
+    // When all turns are done, submit what the student said so the activity is
+    // marked. Skipping every turn leaves nothing to match, and scores nothing.
+    LaunchedEffect(currentTurnIdx, spoken) {
+        if (currentTurnIdx >= turns.size && !submitted) {
+            submitted = true
+            vm.submit(spoken.joinToString(" "))
+        }
     }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -982,11 +1033,13 @@ internal fun PhraseCard(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
-                Modifier.padding(10.dp).drawBehind {
+                // Stripe first, then padding: the stripe sits on the card edge
+                // and the text starts clear of it.
+                Modifier.drawBehind {
                     drawRect(color = AccentAmber,
                         topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
                         size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height))
-                },
+                }.padding(start = 14.dp, top = 10.dp, end = 10.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.Top,
             ) {
@@ -1053,11 +1106,13 @@ internal fun StructuredBlock(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         Column(
-            Modifier.padding(10.dp).drawBehind {
+            // Stripe first, then padding: the stripe sits on the card edge
+            // and the text starts clear of it.
+            Modifier.drawBehind {
                 drawRect(color = stripe,
                     topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
                     size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height))
-            }
+            }.padding(start = 14.dp, top = 10.dp, end = 10.dp, bottom = 10.dp)
         ) {
             Text("$icon  $label",
                 style = MaterialTheme.typography.labelSmall,
@@ -1135,6 +1190,79 @@ internal fun StructuredTable(
 }
 
 @Composable
+/** The check step of a Q&A lesson: the question is asked, the answer is held back. */
+internal fun QuizInstructionCard(index: Int, total: Int) {
+    Card(
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFEDE7F6)),
+        elevation = CardDefaults.cardElevation(0.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("❓", fontSize = 18.sp)
+            Text(
+                "Question $index of $total. Read the question, then tap the mic and " +
+                    "answer in your own words — you are marked on what you say.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF4A148C),
+            )
+        }
+    }
+}
+
+/** Holds the model answer back until the student has tried, then shows it. */
+@Composable
+internal fun ModelAnswerCard(
+    answer: String,
+    revealed: Boolean,
+    onReveal: () -> Unit,
+    glossary: Map<String, String> = emptyMap(),
+    onWordTap: (Glossary.WordMeaning) -> Unit = {},
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+        elevation = CardDefaults.cardElevation(0.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                if (revealed) "✓ MODEL ANSWER" else "MODEL ANSWER — HIDDEN",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF2E7D32),
+            )
+            if (revealed) {
+                BilingualText(
+                    answer,
+                    glossary,
+                    onWordTap,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 22.sp,
+                )
+            } else {
+                Text(
+                    "Say your answer first. The teacher will show the model answer " +
+                        "once you have tried, or tap below if you are stuck.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF4E6E50),
+                )
+                OutlinedButton(onClick = onReveal) {
+                    Text("👁 Show the answer", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun ActivityInstructionCard(type: ActivityType, isRecall: Boolean, isLong: Boolean = false) {
     val (emoji, text) = when {
         isRecall -> "🧠" to "Say it from memory. Tap Peek if you need a hint — the teacher won't read it out this time."
@@ -1144,7 +1272,7 @@ internal fun ActivityInstructionCard(type: ActivityType, isRecall: Boolean, isLo
         type == ActivityType.Speak && isLong -> "📖" to "Read this passage aloud clearly. Take your time."
         type == ActivityType.Speak -> "💬" to "Say this yourself. Use the prompt to guide what you say."
         type == ActivityType.Writing -> "✏" to "Type your answer below."
-        type == ActivityType.Assessment && isLong -> "🧪" to "Final check — read the passage aloud one more time to finish."
+        type == ActivityType.Assessment && isLong -> "🧪" to "Final check — say it once more, clearly. This is the one that counts."
         type == ActivityType.Assessment -> "🧪" to "Final check. Speak your answer to complete this lesson."
         else -> null to null
     }
